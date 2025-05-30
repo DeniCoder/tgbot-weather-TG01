@@ -1,0 +1,118 @@
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters.command import Command
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types.web_app_info import WebAppInfo
+import requests
+import logging
+from config import TOKEN_BOT, API_KEY  # Импорты токенов и ключей API
+import datetime
+from datetime import timedelta
+import asyncio
+
+# Включаем логирование
+logging.basicConfig(level=logging.INFO)
+
+# Инициализация бота и диспетчера
+bot = Bot(token=TOKEN_BOT)
+dp = Dispatcher()
+
+# Создание клавиатуры
+keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+button_help = KeyboardButton(text="Справка")
+button_forecast = KeyboardButton(text="Прогноз на завтра")
+keyboard.add(button_help, button_forecast)
+
+
+# Класс состояний для хранения текущего шага диалога
+class ForecastStates(StatesGroup):
+    GET_CITY = State()
+
+
+# Функция для получения прогноза погоды на завтра
+async def get_tomorrow_weather(city: str):
+    today = datetime.date.today()
+    tomorrow = today + timedelta(days=1)
+    url = f"http://api.weatherapi.com/v1/future.json"
+    params = {"key": API_KEY, "q": city, "dt": tomorrow.isoformat()}
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        if "error" in data:
+            return "Город не найден. Попробуйте снова."
+
+        city_name = data["location"]["name"]
+        country = data["location"]["country"]
+        temp = data["forecast"]["forecastday"][0]["day"]["avgtemp_c"]  # Средняя температура на завтра
+        condition = data["forecast"]["forecastday"][0]["day"]["condition"]["text"]
+        humidity = data["forecast"]["forecastday"][0]["day"]["avghumidity"]
+        wind_kph = data["forecast"]["forecastday"][0]["day"]["maxwind_kph"]
+
+        return {
+            "text": (
+                f"🌍 Город: {city_name}, {country}\n"
+                f"🌡 Прогноз температуры на завтра: {temp}°C\n"
+                f"💨 Ветер: {wind_kph} км/ч\n"
+                f"💧 Влажность: {humidity}%\n"
+                f"☁️ Описание: {condition}"
+            ),
+        }
+    except Exception as e:
+        logging.error(e)
+        return "Произошла ошибка при получении данных о погоде."
+
+
+# Команда /start
+@dp.message(Command("start"))
+async def start_command(message: Message):
+    await message.answer(
+        "Привет! Я бот, который поможет узнать прогноз погоды на завтра.\n"
+        "Напишите название города, и я расскажу, какая ожидается погода!",
+        reply_markup=keyboard
+    )
+
+
+# Команда /help
+@dp.message(Command("help"))
+async def help_command(message: Message):
+    await message.answer(
+        "Используйте следующие команды:\n"
+        "/start - Начать работу с ботом\n"
+        "/help - Справка о боте\n\n"
+        "Чтобы узнать прогноз погоды на завтра, нажмите \"Прогноз на завтра\" или напишите название города."
+    )
+
+
+# Нажатие кнопки "Справка"
+@dp.message(F.text.lower() == "справка")
+async def handle_help_button(message: Message):
+    await help_command(message)
+
+
+# Нажатие кнопки "Прогноз на завтра"
+@dp.message(F.text.lower() == "прогноз на завтра")
+async def ask_for_city(message: Message, state: FSMContext):
+    await message.answer("Введите название города:", reply_markup=ReplyKeyboardRemove())
+    await state.set_state(ForecastStates.GET_CITY)
+
+
+# Обработка ответа пользователя с названием города
+@dp.message(ForecastStates.GET_CITY)
+async def handle_city_input(message: Message, state: FSMContext):
+    city = message.text.strip()
+    forecast = await get_tomorrow_weather(city)
+    if isinstance(forecast, str):
+        await message.answer(forecast)
+    else:
+        await message.answer(forecast["text"], reply_markup=keyboard)
+    await state.clear()
+
+
+# Запуск бота
+async def main():
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

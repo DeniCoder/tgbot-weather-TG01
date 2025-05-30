@@ -1,5 +1,5 @@
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 import requests
 import logging
@@ -17,7 +17,6 @@ dp = Dispatcher()
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Справка")],
-        [KeyboardButton(text="Погода")]
     ],
     resize_keyboard=True
 )
@@ -56,7 +55,7 @@ def get_weather(city: str):
 
 # Команда /start
 @dp.message(Command("start"))
-async def start_command(message: types.Message):
+async def start_command(message: Message):
     await message.answer(
         "Привет! Я бот, который поможет узнать текущую погоду в любом городе. "
         "Просто отправьте мне название города, и я расскажу, какая там погода сейчас! "
@@ -66,7 +65,7 @@ async def start_command(message: types.Message):
 
 # Команда /help
 @dp.message(Command("help"))
-async def help_command(message: types.Message):
+async def help_command(message: Message):
     await message.answer(
         "Используйте следующие команды:\n"
         "/start - Начать работу с ботом\n"
@@ -74,9 +73,14 @@ async def help_command(message: types.Message):
         "Также вы можете просто отправить название города, чтобы узнать его погоду."
     )
 
+# Нажатие кнопки "Справка"
+@dp.message(F.text.lower() == "справка")
+async def handle_help_button(message: Message):
+    await help_command(message)
+
 # Обработка сообщений с текстом (название города)
 @dp.message()
-async def get_weather_message(message: types.Message):
+async def get_weather_message(message: Message):
     city = message.text.strip()
     weather = get_weather(city)
     if isinstance(weather, str):
