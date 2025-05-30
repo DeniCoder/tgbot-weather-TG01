@@ -46,7 +46,7 @@ def get_weather(city: str):
                 f"🌡 Температура: {temp}°C\n"
                 f"💨 Ветер: {wind_kph} км/ч\n"
                 f"💧 Влажность: {humidity}%\n"
-                f"☁️ Описание: {condition}"
+                f"☁️ Условие: {condition}"
             ),
             "icon": icon_url,
         }
